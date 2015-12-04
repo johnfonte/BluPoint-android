@@ -13,6 +13,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
@@ -168,6 +169,24 @@ public class MainActivity extends Activity {
                 locations.add(newLocation);
                 Log.d(TAG, String.format("RSSI: %s TAG: %d", key, availableBLEs.get(key)));
             }
+
+            WifiManager wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
+            if (!wifiManager.isWifiEnabled())
+            {
+                Toast.makeText(getApplicationContext(), "Enabling WiFi", Toast.LENGTH_LONG).show();
+                wifiManager.setWifiEnabled(true);
+            }
+            List<android.net.wifi.ScanResult> scanResults = wifiManager.getScanResults();
+            for(android.net.wifi.ScanResult scanResult : scanResults) {
+                if(scanResult.SSID.equals("Cambium")) {
+                    Log.d(TAG, String.format("wifi %s", scanResult.toString()));
+                    Location newLocation = new Location();
+                    newLocation.setBeaconId(scanResult.BSSID);
+                    newLocation.setStrength(scanResult.level);
+                    locations.add(newLocation);
+                }
+            }
+
             report.setLocation(locations);
 
             if(!locations.isEmpty()) {
@@ -180,7 +199,8 @@ public class MainActivity extends Activity {
 
                     @Override
                     public void onFailure(Throwable t) {
-                        Log.d(TAG, String.format("%s", t.getMessage()));
+                        Log.d(TAG, String.format("Report Failed"));
+                        Log.d(TAG, String.format("%s", t.toString()));
                     }
                 });
             }
