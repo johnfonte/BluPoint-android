@@ -2,6 +2,7 @@ package com.johnfonte.blupoint.api;
 
 import java.util.List;
 import com.johnfonte.blupoint.object.Person;
+import com.johnfonte.blupoint.object.Report;
 import com.johnfonte.blupoint.object.Token;
 
 import retrofit.Call;
@@ -21,5 +22,5 @@ public interface BluPointWeb {
     Call<Token> signup( @Path (value = "name")String name );
 
     @PUT("/report/id/{person_id}")
-    Call<String> report( @Path (value = "person_id")int person_id );
+    Call<String> report( @Body Report report, @Path (value = "person_id") Integer person_id );
 }
