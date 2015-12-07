@@ -2,7 +2,7 @@
 <resources>
 
     <string name="app_name">BluPoint</string>
-    <string name="hello_world">Hello world!</string>
+    <string name="hello_world">Service gathers bluetooth and wifi data in background every 10 seconds. Enable bluetooth for best results.</string>
     <string name="action_settings">Settings</string>
     <string name="ble_not_supported">Bluetooth LE No Support</string>
 
