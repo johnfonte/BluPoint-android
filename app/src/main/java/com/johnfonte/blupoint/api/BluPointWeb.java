@@ -4,8 +4,10 @@ import java.util.List;
 import com.johnfonte.blupoint.object.Person;
 import com.johnfonte.blupoint.object.Report;
 import com.johnfonte.blupoint.object.Token;
+import com.squareup.okhttp.ResponseBody;
 
 import retrofit.Call;
+import retrofit.Response;
 import retrofit.http.*;
 
 public interface BluPointWeb {
@@ -22,5 +24,5 @@ public interface BluPointWeb {
     Call<Token> signup( @Path (value = "name")String name );
 
     @PUT("/report/id/{person_id}")
-    Call<String> report( @Body Report report, @Path (value = "person_id") Integer person_id );
+    Call<ResponseBody> report( @Body Report report, @Path (value = "person_id") Integer person_id );
 }

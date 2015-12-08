@@ -36,7 +36,7 @@ public class MainActivity extends Activity {
     private final static String SHARED_PREFS_KEY = "BluPointPrefs";
     private final static String SHARED_PREFS_PERSONID_KEY = "BluPointPrefsPersonId";
     BluPointWeb service;
-    private final static Integer SEND_PERIOD = 10000;
+    private final static Integer SEND_PERIOD = 30000;
     private final static Integer mJobId = 1234567;
 
     @Override
@@ -57,12 +57,11 @@ public class MainActivity extends Activity {
 // set up conditions for the job
         JobInfo task = new JobInfo.Builder(mJobId, mServiceComponent)
                 .setPeriodic(SEND_PERIOD)
-                .setRequiresCharging(true) // default is "false"
-                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY) // Parameter may be "ANY", "NONE" (=default) or "UNMETERED"
+                .setPersisted(true)
                 .build();
 // inform the system of the job
         JobScheduler jobScheduler = (JobScheduler) getApplicationContext().getSystemService(Context.JOB_SCHEDULER_SERVICE);
-        jobScheduler.cancelAll();
+        jobScheduler.cancel(mJobId);
         jobScheduler.schedule(task);
 
     }

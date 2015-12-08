@@ -17,12 +17,14 @@ import android.widget.Toast;
 import com.johnfonte.blupoint.api.BluPointWeb;
 import com.johnfonte.blupoint.object.Location;
 import com.johnfonte.blupoint.object.Report;
+import com.squareup.okhttp.ResponseBody;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import android.os.Handler;
 
 import retrofit.Call;
 import retrofit.Callback;
@@ -40,27 +42,47 @@ public class SweepService extends JobService {
     BluPointWeb service;
     private final static String SHARED_PREFS_KEY = "BluPointPrefs";
     private final static String SHARED_PREFS_PERSONID_KEY = "BluPointPrefsPersonId";
-    private Map<String, Integer> availableBLEs = new HashMap<>();
-    private final static Integer SCAN_PERIOD = 3000;
+    private Map<String, Integer> availableSensors = new HashMap<>();
+    private final static Integer SCAN_PERIOD = 1100;
     BluetoothLeScanner scanner;
+    final Handler handler = new Handler();
+    private boolean bleEnabled = false;
+    private Integer personId;
+    private JobParameters params;
 
     @Override
     public boolean onStartJob(final JobParameters params) {
         Log.d(TAG, "Job Started");
+        this.params = params;
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
                     SharedPreferences sp = getSharedPreferences(SHARED_PREFS_KEY, Activity.MODE_PRIVATE);
-                    Integer personId = sp.getInt(SHARED_PREFS_PERSONID_KEY, -1);
+                    personId = sp.getInt(SHARED_PREFS_PERSONID_KEY, -1);
                     if(personId != -1) {
+                        availableSensors.clear();
                         Retrofit retrofit = new Retrofit.Builder()
                                 .addConverterFactory(GsonConverterFactory.create())
                                 .baseUrl(BASE_URL)
                                 .build();
                         service = retrofit.create(BluPointWeb.class);
 
-                        boolean bleEnabled = false;
+                        WifiManager wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
+                        if (wifiManager.isWifiEnabled())
+                        {
+                            List<android.net.wifi.ScanResult> scanResults = wifiManager.getScanResults();
+                            for(android.net.wifi.ScanResult scanResult : scanResults) {
+                                if(scanResult.SSID.equals(WIRELESS_KEY)) {
+//                                    Log.d(TAG, String.format("wifi %s", scanResult.toString()));
+                                    availableSensors.put(scanResult.BSSID, scanResult.level);
+                                }
+                            }
+                        } else {
+                            Toast.makeText(getApplicationContext(), "Enabling WiFi", Toast.LENGTH_LONG).show();
+                            wifiManager.setWifiEnabled(true);
+                        }
+
                         final BluetoothManager bluetoothManager =
                                 (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
                         mBluetoothAdapter = bluetoothManager.getAdapter();
@@ -70,63 +92,15 @@ public class SweepService extends JobService {
                             mBluetoothAdapter.startDiscovery();
                             scanner = mBluetoothAdapter.getBluetoothLeScanner();
                             bleEnabled = true;
-                        }
-
-                        availableBLEs.clear();
-                        if(bleEnabled) {
                             scanner.startScan(mLeScanCallback);
-                            wait(SCAN_PERIOD);
-                            scanner.stopScan(mLeScanCallback);
+                        } else {
+                            bleEnabled = false;
                         }
+                        handler.postDelayed(runnable, SCAN_PERIOD);
 
-                        Report report = new Report();
-                        report.setId(personId);
-                        List<Location> locations = new ArrayList<>();
-                        for(String key : availableBLEs.keySet()) {
-                            Location newLocation = new Location();
-                            newLocation.setBeaconId(key);
-                            newLocation.setStrength(availableBLEs.get(key));
-                            locations.add(newLocation);
-                            Log.d(TAG, String.format("RSSI: %s TAG: %d", key, availableBLEs.get(key)));
-                        }
-
-                        WifiManager wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
-                        if (!wifiManager.isWifiEnabled())
-                        {
-                            Toast.makeText(getApplicationContext(), "Enabling WiFi", Toast.LENGTH_LONG).show();
-                            wifiManager.setWifiEnabled(true);
-                        }
-                        List<android.net.wifi.ScanResult> scanResults = wifiManager.getScanResults();
-                        for(android.net.wifi.ScanResult scanResult : scanResults) {
-                            if(scanResult.SSID.equals(WIRELESS_KEY)) {
-                                Log.d(TAG, String.format("wifi %s", scanResult.toString()));
-                                Location newLocation = new Location();
-                                newLocation.setBeaconId(scanResult.BSSID);
-                                newLocation.setStrength(scanResult.level);
-                                locations.add(newLocation);
-                            }
-                        }
-
-                        report.setLocation(locations);
-
-                        if(!locations.isEmpty()) {
-                            Call<String> reporting = service.report(report, personId);
-                            reporting.enqueue(new Callback<String>() {
-                                @Override
-                                public void onResponse(Response<String> response, Retrofit retrofit) {
-                                    Log.d(TAG, "Report Succeeded");
-                                }
-
-                                @Override
-                                public void onFailure(Throwable t) {
-                                    Log.d(TAG, "Report Failed");
-                                    Log.d(TAG, String.format("%s", t.toString()));
-                                }
-                            });
-                        }
-
+                    } else {
+                        jobFinished(params, false);
                     }
-                    jobFinished(params, false);
                 } catch (Exception e) {
                     jobFinished(params, true);
                 } finally {
@@ -144,6 +118,49 @@ public class SweepService extends JobService {
 
         return false;
     }
+
+    private Runnable runnable = new Runnable() {
+        @Override
+        public void run() {
+            if(bleEnabled) {
+                scanner.stopScan(mLeScanCallback);
+            }
+
+            Report report = new Report();
+            report.setId(personId);
+            List<Location> locations = new ArrayList<>();
+
+            for(String key : availableSensors.keySet()) {
+                Location newLocation = new Location();
+                newLocation.setBeaconId(key);
+                newLocation.setStrength(availableSensors.get(key));
+                locations.add(newLocation);
+                Log.d(TAG, String.format("TAG: %s RSSI: %d", key, availableSensors.get(key)));
+            }
+
+            report.setLocation(locations);
+
+            if(!locations.isEmpty()) {
+                Call<ResponseBody> reporting = service.report(report, personId);
+                reporting.enqueue(new Callback<ResponseBody>() {
+                    @Override
+                    public void onResponse(Response response, Retrofit retrofit) {
+                        Log.d(TAG, "Report Succeeded");
+                        jobFinished(params, false);
+                    }
+
+                    @Override
+                    public void onFailure(Throwable t) {
+                        Log.d(TAG, "Report Failed");
+                        Log.d(TAG, String.format("%s", t.toString()));
+                        Log.d(TAG, String.format("%s", t.getCause()));
+                        jobFinished(params, false);
+                    }
+                });
+            }
+
+        }
+    };
 
     private ScanCallback mLeScanCallback =
         new ScanCallback() {
@@ -163,8 +180,8 @@ public class SweepService extends JobService {
                         String bytesHex = MainActivity.bytesToHex(bytes);
                         if (bytesHex.substring(0, 26).equals(BT_KEY)) {
                             // add it to send map
-                            availableBLEs.put(bytesHex.substring(0, 28), rssi);
-//                        Log.d(TAG, String.format("tag: %s", bytesHex.substring(0, 28)));
+                            availableSensors.put(bytesHex.substring(0, 28), rssi);
+//                            Log.d(TAG, String.format("tag: %s", bytesHex.substring(0, 28)));
                         }
 //                    Log.d(TAG, String.format("onScanResult: %s length: %d substr: %s", bytesHex, bytes.length, bytesHex.substring(0, 25)));
                     }
