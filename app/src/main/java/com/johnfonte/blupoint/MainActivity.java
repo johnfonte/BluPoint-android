@@ -12,6 +12,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
@@ -32,6 +33,7 @@ public class MainActivity extends Activity {
 
     public static final String TAG = "MainActivity";
     private final static int REQUEST_ENABLE_BT = 1;
+    private final static int REQUEST_ENABLE_WIFI = 2;
     public static final String BASE_URL = "http://hackathon.shafeen.xyz:5000";
     private final static String SHARED_PREFS_KEY = "BluPointPrefs";
     private final static String SHARED_PREFS_PERSONID_KEY = "BluPointPrefsPersonId";
@@ -44,12 +46,13 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
-            Toast.makeText(this, R.string.action_settings, Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.ble_not_supported, Toast.LENGTH_SHORT).show();
             finish();
         }
 
         setupRetrofit();
         setupAccount();
+        setupWifi();
         setupBluetooth();
 
         // wrap your stuff in a componentName
@@ -62,7 +65,12 @@ public class MainActivity extends Activity {
 // inform the system of the job
         JobScheduler jobScheduler = (JobScheduler) getApplicationContext().getSystemService(Context.JOB_SCHEDULER_SERVICE);
         jobScheduler.cancel(mJobId);
-        jobScheduler.schedule(task);
+        int jobSuccessful = jobScheduler.schedule(task);
+        if(jobSuccessful > 0) {
+            Toast.makeText(this, R.string.job_started, Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, R.string.job_didnot_start, Toast.LENGTH_SHORT).show();
+        }
 
     }
 
@@ -72,10 +80,12 @@ public class MainActivity extends Activity {
         if (requestCode == REQUEST_ENABLE_BT) {
             // Make sure the request was successful
             if (resultCode == RESULT_OK) {
-                // The user picked a contact.
-                // The Intent's data Uri identifies which contact was selected.
                 Log.d(TAG, "bluetooth enabled");
-                // Do something with the contact here (bigger example below)
+            }
+        } else if(requestCode == REQUEST_ENABLE_WIFI) {
+            // Make sure the request was successful
+            if (resultCode == RESULT_OK) {
+                Log.d(TAG, "wifi enabled");
             }
         }
     }
@@ -87,6 +97,15 @@ public class MainActivity extends Activity {
                 .build();
         service = retrofit.create(BluPointWeb.class);
 
+    }
+
+    private void setupWifi() {
+        WifiManager wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
+        if (!wifiManager.isWifiEnabled())
+        {
+            Intent enableWifiIntent = new Intent(android.provider.Settings.ACTION_WIFI_SETTINGS);
+            startActivityForResult(enableWifiIntent, REQUEST_ENABLE_WIFI);
+        }
     }
 
     private void setupBluetooth() {

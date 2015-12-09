@@ -78,9 +78,6 @@ public class SweepService extends JobService {
                                     availableSensors.put(scanResult.BSSID, scanResult.level);
                                 }
                             }
-                        } else {
-                            Toast.makeText(getApplicationContext(), "Enabling WiFi", Toast.LENGTH_LONG).show();
-                            wifiManager.setWifiEnabled(true);
                         }
 
                         final BluetoothManager bluetoothManager =
@@ -138,9 +135,8 @@ public class SweepService extends JobService {
                 Log.d(TAG, String.format("TAG: %s RSSI: %d", key, availableSensors.get(key)));
             }
 
-            report.setLocation(locations);
-
             if(!locations.isEmpty()) {
+                report.setLocation(locations);
                 Call<ResponseBody> reporting = service.report(report, personId);
                 reporting.enqueue(new Callback<ResponseBody>() {
                     @Override
